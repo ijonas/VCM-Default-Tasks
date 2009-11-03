@@ -11,6 +11,38 @@ import org.apache.http.client.ResponseHandler
 import org.apache.http.impl.client.DefaultHttpClient
 import org.apache.http.client.methods.HttpGet
 
+class WebSelector < com.vamosa.tasks.ParameterisedTask
+
+  def usage()
+    requiresProject("project", "the default to select content from")
+    requiresURL("startUrl", "the URL of the page to start crawling from", "http://www.vamosa.com/")
+    requiresInteger("maxNoURLs", "the maximum no. of URLs to crawl", 20)
+  end
+  
+  def retrieve_additional_cups(project)
+    cups_resource = $projectManagerService.findProjectResourceByNameAndProject("CUPs", project)
+    additional_cups = []
+    unless cups_resource.nil?
+      cups_resource.contents.each_line {|line| additional_cups << [Regexp.new(line.split(",")[0]), line.split(",")[1]] }
+    end
+    additional_cups
+  end
+
+  def iterator(project, startUrl, maxNoURLs)
+    begin
+      $logger.info "Starting Web Crawl"
+      cups = [ [/#{startUrl}.*/,"include"] ] + retrieve_additional_cups(project)
+      WebResourceIterator.new($logger, project, startUrl, cups, maxNoURLs)
+    rescue Exception => e
+      puts e
+      puts e.backtrace
+      $logger.error(e.message)
+      $logger.error(e.backtrace.to_s)
+    end
+  end
+
+end
+
 class WebResourceIterator
   include JUtil::Iterator
   include ResponseHandler
@@ -71,8 +103,16 @@ class WebResourceIterator
   end
 
   def matches_cup(link)
-    @cups.each { |cup| return true if link =~ cup }
-    false
+    @logger.debug "matching #{link} against cups..."
+    matches = false
+    @cups.each do |pattern, type|
+        @logger.debug "matching #{link} against #{pattern} for #{type}..."
+        matches = true if link =~ pattern
+        return false if link =~ pattern and type.downcase == "exclude"
+        @logger.debug "current state: #{matches}"
+    end
+    @logger.debug "returning #{matches}"
+    matches
   end
 
   def handleResponse(response)
@@ -149,36 +189,4 @@ class WebResourceIterator
 
   def remove()
   end
-end
-
-class WebSelector < com.vamosa.tasks.ParameterisedTask
-
-  def usage()
-    requiresProject("project", "the default to select content from")
-    requiresURL("startUrl", "the URL of the page to start crawling from", "http://www.vamosa.com/")
-    requiresInteger("maxNoURLs", "the maximum no. of URLs to crawl", 20)
-  end
-  
-  def retrieve_additional_cups(project)
-    cups_resource = $projectManagerService.findProjectResourceByNameAndProject("CUPs", project)
-    additional_cups = []
-    unless cups_resource.nil?
-      cups_resource.contents.each_line {|line| additional_cups << Regexp.new(line) }
-    end
-    additional_cups
-  end
-
-  def iterator(project, startUrl, maxNoURLs)
-    begin
-      $logger.info "Starting Web Crawl"
-      cups = [ /http:\/\/www.fatwire.com\/.*/ ] + retrieve_additional_cups(project)
-      WebResourceIterator.new($logger, project, startUrl, cups, maxNoURLs)
-    rescue Exception => e
-      puts e
-      puts e.backtrace
-      $logger.error(e.message)
-      $logger.error(e.backtrace.to_s)
-    end
-  end
-
 end
