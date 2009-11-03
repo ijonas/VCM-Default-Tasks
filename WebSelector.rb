@@ -173,6 +173,8 @@ class WebResourceIterator
           content_descriptor.addContentData(content)
           content_descriptor.metadata.putAll(metadata)
           outbound_links.each {|link| content_descriptor.addOutboundLink(link)}
+          puts "Retrieved #{url} [#{@crawled_urls.length} Crawled, #{@crawl_queue.length} Queued]"
+          @logger.info "Retrieved #{url} [#{@crawled_urls.length} Crawled, #{@crawl_queue.length} Queued]"
           content_descriptor
         end
       else
