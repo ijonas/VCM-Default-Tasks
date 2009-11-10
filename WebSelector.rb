@@ -5,11 +5,29 @@ require "rubygems"
 require "hpricot"
 require "uri"
 
-module JUtil include_package "java.util" end
-import java.util.Iterator
-import org.apache.http.client.ResponseHandler
-import org.apache.http.impl.client.DefaultHttpClient
-import org.apache.http.client.methods.HttpGet
+
+class Bloom
+  import org.apache.hadoop.util.bloom.BloomFilter
+  import org.apache.hadoop.util.bloom.Key
+  
+  def initialize(no_of_bits, no_of_hashes = 8, hash_type = 0)
+    @filter = BloomFilter.new(no_of_bits, no_of_hashes, hash_type)
+  end
+  
+  def include?(payload)
+    @filter.membershipTest( generate_key(payload) )
+  end
+  
+  def add(payload)
+    @filter.add( generate_key(payload) )    
+  end
+  
+  private
+  def generate_key(payload)
+    org.apache.hadoop.util.bloom.Key.new(payload.to_java_bytes)
+  end
+  
+end
 
 class WebSelector < com.vamosa.tasks.ParameterisedTask
 
@@ -44,18 +62,22 @@ class WebSelector < com.vamosa.tasks.ParameterisedTask
 end
 
 class WebResourceIterator
-  include JUtil::Iterator
+  import org.apache.http.impl.client.DefaultHttpClient
+  import org.apache.http.client.methods.HttpGet
+  import java.util.Iterator
+  import org.apache.http.client.ResponseHandler
+  include java.util.Iterator
   include ResponseHandler
 
   def initialize(logger, project, start_url, cups, maxNoURLs)
     @logger = logger
     @http_client = DefaultHttpClient.new
-    @crawled_resources = JUtil::LinkedList.new
-    @crawled_urls = Set.new
+    @crawled_urls = Bloom.new(maxNoURLs)
     @crawl_queue = Set.new [start_url]
     @project = project
     @cups = cups
     @maxNoURLs = maxNoURLs
+    @noUrlsCrawled = 0
   end
 
   def hasNext()
@@ -116,7 +138,7 @@ class WebResourceIterator
   end
 
   def handleResponse(response)
-    @crawled_urls << @current_url
+    @crawled_urls.add @current_url
     unless response.entity.nil?
       if response.entity.contentType.value =~ /text/
         content = org.apache.http.util.EntityUtils.toString(response.entity)
@@ -165,6 +187,7 @@ class WebResourceIterator
   def next()
     begin
       if not @crawl_queue.empty? and @maxNoURLs > 0
+        @noUrlsCrawled+=1
         if @crawl_queue.size > 0
           @current_url = @crawl_queue.to_a[0]
           @crawl_queue.delete(@current_url)
@@ -173,8 +196,8 @@ class WebResourceIterator
           content_descriptor.addContentData(content)
           content_descriptor.metadata.putAll(metadata)
           outbound_links.each {|link| content_descriptor.addOutboundLink(link)}
-          puts "Retrieved #{url} [#{@crawled_urls.length} Crawled, #{@crawl_queue.length} Queued]"
-          @logger.info "Retrieved #{url} [#{@crawled_urls.length} Crawled, #{@crawl_queue.length} Queued]"
+          puts "Retrieved #{url} [#{@noUrlsCrawled} Crawled, #{@crawl_queue.length} Queued]"
+          @logger.info "Retrieved #{url} [#{@noUrlsCrawled} Crawled, #{@crawl_queue.length} Queued]"
           content_descriptor
         end
       else
