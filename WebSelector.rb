@@ -9,24 +9,24 @@ require "uri"
 class Bloom
   import org.apache.hadoop.util.bloom.BloomFilter
   import org.apache.hadoop.util.bloom.Key
-  
+
   def initialize(no_of_bits, no_of_hashes = 8, hash_type = 0)
     @filter = BloomFilter.new(no_of_bits, no_of_hashes, hash_type)
   end
-  
+
   def include?(payload)
     @filter.membershipTest( generate_key(payload) )
   end
-  
+
   def add(payload)
-    @filter.add( generate_key(payload) )    
+    @filter.add( generate_key(payload) )
   end
-  
+
   private
   def generate_key(payload)
     org.apache.hadoop.util.bloom.Key.new(payload.to_java_bytes)
   end
-  
+
 end
 
 class WebSelector < com.vamosa.tasks.ParameterisedTask
@@ -36,7 +36,7 @@ class WebSelector < com.vamosa.tasks.ParameterisedTask
     requiresURL("startUrl", "the URL of the page to start crawling from", "http://www.vamosa.com/")
     requiresInteger("maxNoURLs", "the maximum no. of URLs to crawl", 20)
   end
-  
+
   def retrieve_additional_cups(project)
     cups_resource = $projectManagerService.findProjectResourceByNameAndProject("CUPs", project)
     additional_cups = []
@@ -126,10 +126,10 @@ class WebResourceIterator
     @logger.debug "matching #{link} against cups..."
     matches = false
     @cups.each do |pattern, type|
-        @logger.debug "matching #{link} against #{pattern} for #{type}..."
-        matches = true if link =~ pattern
-        return false if link =~ pattern and type.downcase == "exclude"
-        @logger.debug "current state: #{matches}"
+      @logger.debug "matching #{link} against #{pattern} for #{type}..."
+      matches = true if link =~ pattern
+      return false if link =~ pattern and type.downcase == "exclude"
+      @logger.debug "current state: #{matches}"
     end
     @logger.debug "returning #{matches}"
     matches
@@ -138,7 +138,7 @@ class WebResourceIterator
   def handleResponse(response)
     @crawled_urls.add @current_url
     metadata = {"Identify Metadata.Status-Code" => "#{response.statusLine.statusCode}", "Identify Metadata.Status" => "#{response.statusLine.reasonPhrase}"}
-    unless response.entity.nil?
+    unless response.entity.nil? 
       if response.entity.contentType.value =~ /text/
         content = org.apache.http.util.EntityUtils.toString(response.entity)
         if response.entity.contentType.value =~ /text\/html/
@@ -158,7 +158,7 @@ class WebResourceIterator
 
           # make sure links have previously not been crawler or are scheduled to be crawled
           uncrawled_links = cups_filtered_links.reject {|link| @crawled_urls.include?(link) or @crawl_queue.include?(link)}
-          uncrawled_links.each do {|link| @crawl_queue.add link }
+          uncrawled_links.each { |link| @crawl_queue.add link }
         end
       else
         #content_bytes = org.apache.http.util.EntityUtils.toByteArray(response.entity)
@@ -180,39 +180,37 @@ class WebResourceIterator
   end
 
   def next()
-    tries = 5
-    content_descriptor = nil 
-    while tries > 0
-    begin
+    content_descriptor = nil
+    retrieved_url = false
+    while not retrieved_url and not @crawl_queue.empty?
       if not @crawl_queue.empty? and @maxNoURLs > 0
-      @noUrlsCrawled+=1
-      if @crawl_queue.size > 0
-        @current_url = @crawl_queue.to_a[0]
-        @crawl_queue.delete(@current_url)
-        url, content, metadata, outbound_links = retrieve(@current_url)
-        content_descriptor = com.vamosa.content.ContentDescriptor.new(url, @project)
-        content_descriptor.addContentData(content)
-        content_descriptor.metadata.putAll(metadata)
-        outbound_links.each {|link| content_descriptor.addOutboundLink(link)}
-        @logger.info "Retrieved #{url} [#{@noUrlsCrawled} Crawled, #{@crawl_queue.length} Queued]"
-        tries = 0
-      end
+        @noUrlsCrawled+=1
+        if @crawl_queue.size > 0
+          @current_url = @crawl_queue.to_a[0]
+          @crawl_queue.delete(@current_url)
+          begin
+            url, content, metadata, outbound_links = retrieve(@current_url)
+            content_descriptor = com.vamosa.content.ContentDescriptor.new(url, @project)
+            content_descriptor.addContentData(content)
+            content_descriptor.metadata.putAll(metadata)
+            outbound_links.each {|link| content_descriptor.addOutboundLink(link)}
+            @logger.info "Retrieved #{url} [#{@noUrlsCrawled} Crawled, #{@crawl_queue.length} Queued]"
+            retrieved_url = true
+          rescue RuntimeError => e
+            @logger.error(e.message)
+            @logger.error(e.backtrace.to_s)
+          end
+          tries = 0
+        end
       else
-      @http_client.connectionManager.shutdown
-      nil
+        @http_client.connectionManager.shutdown
+        nil
       end
-    rescue Exception => e
-      tries -= 1
-      puts e
-      puts e.backtrace
-      @logger.error(e.message)
-      @logger.error(e.backtrace.to_s)
-      @logger.info "Retrying..."
     end
-  end
-  content_descriptor
+    content_descriptor
   end
 
   def remove()
   end
 end
+​
