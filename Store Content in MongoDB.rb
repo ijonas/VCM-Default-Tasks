@@ -1,11 +1,18 @@
-# begin
-# require "java"
-# rescue
-# end
+require "java"
 require "rubygems"
 require "mongo"
+require 'mongo/gridfs'
+ 
+include Mongo
+include GridFS
 
-class StoreContentInMongoDB < ParameterisedTask
+module Vamosa
+  include_package 'com.vamosa.tasks'
+  include_package 'com.vamosa.projects'
+end
+
+class StoreContentInMongoDB < com.vamosa.tasks.ParameterisedTask
+
   def usage()
     requiresContentDescriptor("contentDescriptor", "the default content descriptor")
     requiresContent("content", "the default content")
@@ -16,10 +23,10 @@ class StoreContentInMongoDB < ParameterisedTask
   def serialise_project_path(project)
 
     # try converting project -> master project (null if it fails)
-    master_project = Project.getProjectAsMasterProject(project)
+    master_project = Vamosa::Project.getProjectAsMasterProject(project)
 
     # if masterProject is null then we're dealing with a subproject
-    sub_project = Project.getProjectAsSubProject(project) if  master_project.nil?
+    sub_project = Vamosa::Project.getProjectAsSubProject(project) if  master_project.nil?
 
     # if masterProject is still null, retrieve it via the sub project
     master_project ||= sub_project.masterProject
@@ -49,10 +56,6 @@ class StoreContentInMongoDB < ParameterisedTask
     doc_links = doc['outbound-links']
     cd.outboundLinks.each { |ol| doc_links << ol.url }
 
-    # transfer the contents
-    doc_contents = doc['contents']
-    cd.contents.each { |c| doc_contents << c }
-
     # transfer the metadata in separate sub documents
     serialise_metadata(doc, cd.metadata)
 
@@ -62,6 +65,17 @@ class StoreContentInMongoDB < ParameterisedTask
   def enhance( contentDescriptor, content, db_name, collection_name )
     $logger.info "Storing #{contentDescriptor.url}"
     @connection ||= Connection.new("localhost")
-    @connection.db(db_name).collection(collection_name).insert serialised(contentDescriptor)
+    db = @connection.db(db_name)
+    
+    # serialiase the content descriptor
+    db.collection(collection_name).insert serialised(contentDescriptor)
+    
+    # store the related content
+    contentDescriptor.content.each do |content|
+      GridStore.open(db, "#{content.getId} #{contentDescriptor.url}", "w") do |f|
+        f.puts content.contentData
+      end
+    end
+    
   end
 end
