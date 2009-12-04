@@ -213,4 +213,3 @@ class WebResourceIterator
   def remove()
   end
 end
-​
