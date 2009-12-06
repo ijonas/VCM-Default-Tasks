@@ -1,5 +1,4 @@
 require "java"
-require "rubygems"
 
 class Echo < com.vamosa.tasks.ParameterisedTask
   def usage()
@@ -8,7 +7,6 @@ class Echo < com.vamosa.tasks.ParameterisedTask
   end
 
   def enhance( contentDescriptor, content )
-    puts "Echoing: #{contentDescriptor}"
     $logger.info "Echoing: #{contentDescriptor}"
   end
 end
