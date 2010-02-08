@@ -19,6 +19,7 @@ describe "Sample Selector's iterator" do
     @selector.next.should_not be_nil
   end
   it "should return nil if there are no content descriptors" do
+    @selector.hasNext.should be_true
     @selector.next
     @selector.next
     @selector.next

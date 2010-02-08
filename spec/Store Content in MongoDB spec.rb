@@ -1,5 +1,4 @@
 require File.expand_path(File.dirname(__FILE__) + '/spec_helper')
-require "logger"
 require "rubygems"
 require "haml"
 require "mongo"
@@ -37,8 +36,6 @@ describe "Store Content in MongoDB" do
     @mongo_mock.stub!(:collection).and_return(@mongo_mock)
     
     @gridfs_mock = mock("gridfs mock")
-    
-    $logger = Logger.new(STDOUT)
   end
   it "should serialise the url" do
     @task.serialised(@content_descriptor)['url'].should == 'http://www.vamosa.com'

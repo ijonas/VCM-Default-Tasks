@@ -40,7 +40,7 @@ class WebSelector < com.vamosa.tasks.ParameterisedTask
   def retrieve_additional_cups(project)
     cups_resource = $projectManagerService.findProjectResourceByNameAndProject("CUPs", project)
     additional_cups = []
-    unless cups_resource.nil? 
+    unless cups_resource.nil?
       cups_resource.contents.each_line {|line| additional_cups << [Regexp.new(line.split(",")[0]), line.split(",")[1]] }
     end
     additional_cups
@@ -90,7 +90,7 @@ class WebResourceIterator
     links = (elements.map {|element| element['href'] or element['src'] }).reject {|link| link =~ /\Ajavascript/ or link =~ /\Amailto/}
 
     base_elem = doc.at("base")
-    base = base_elem['href'] unless base_elem.nil? 
+    base = base_elem['href'] unless base_elem.nil?
     [base, links]
   end
 
@@ -138,7 +138,7 @@ class WebResourceIterator
   def handleResponse(response)
     @crawled_urls.add @current_url
     metadata = {"Identify Metadata.Status-Code" => "#{response.statusLine.statusCode}", "Identify Metadata.Status" => "#{response.statusLine.reasonPhrase}"}
-    unless response.entity.nil? 
+    unless response.entity.nil?
       if response.entity.contentType.value =~ /text/
         content = org.apache.http.util.EntityUtils.toString(response.entity)
         if response.entity.contentType.value =~ /text\/html/
@@ -189,16 +189,23 @@ class WebResourceIterator
           @current_url = @crawl_queue.to_a[0]
           @crawl_queue.delete(@current_url)
           begin
+            @logger.info "1"
             url, content, metadata, outbound_links = retrieve(@current_url)
+            @logger.info "2"
             content_descriptor = com.vamosa.content.ContentDescriptor.new(url, @project)
+            @logger.info "3"
             content_descriptor.addContentData(content)
+            @logger.info "4"
             content_descriptor.metadata.putAll(metadata)
+            @logger.info "5"
             outbound_links.each {|link| content_descriptor.addOutboundLink(link)}
+            @logger.info "6"
             @logger.info "Retrieved #{url} [#{@noUrlsCrawled} Crawled, #{@crawl_queue.length} Queued]"
+            @logger.info "7"
             retrieved_url = true
           rescue RuntimeError => e
             @logger.error(e.message)
-            @logger.error(e.backtrace.to_s)
+            e.backtrace.each {|bt| @logger.error bt}
           end
           tries = 0
         end
@@ -207,6 +214,7 @@ class WebResourceIterator
         nil
       end
     end
+
     content_descriptor
   end
 
